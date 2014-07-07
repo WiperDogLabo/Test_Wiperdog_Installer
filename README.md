@@ -3,7 +3,10 @@ Test_Wiperdog_Installer
 
 Automation script test for Wiperdog installer
 
-Usage:
+I. Dependencies:
+You need to install expect tool to support the test. In Ubuntu, use the following sytax to install expect:
+   sudo apt-get install expect
+II. Usage:
 Using maven to install wiperdog from source. 
 Run each test use the syntax:
 ./test_installer_case<n>.sh <full-path-to-installer-jar-file>
