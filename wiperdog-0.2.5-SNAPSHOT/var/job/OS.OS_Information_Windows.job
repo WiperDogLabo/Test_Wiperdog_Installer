@@ -1,0 +1,64 @@
+/**
+ * Monitoring properties of system.<br/>
+ * @targetVersion Windows Xp Professional, Version 2002, Service Pack 3
+ * @return get properties of OS.
+ * @returnParam OSName The name of the OS.
+ * @returnParam HostName The host name of the OS.
+ * @returnParam InstallDate The date time of the OS installed.
+ * @returnParam NumberOfUsersCnt The total amount of user in the OS.
+ * @returnParam ServicePackVersionID The id of the service pack major version.
+ * @returnParam VersionID The id version of the OS.
+ * @returnParam WindowsDirName The path to Windows folder of the OS.
+ */
+JOB = [name:"OS.OS_Information_Windows"]
+
+FETCHACTION = {
+	//def command = [type:"wmic",commandStr:"OS GET Caption,Version,WindowsDirectory,NumberOfUsers,CSName,InstallDate,ServicePackMajorVersion /format:csv"]
+	
+	def getOSInfo = {varStr ->
+		def command = [type:"wmic",commandStr:"OS GET $varStr"]
+		def procData = procRunner.procExecute(command,true)
+		def output = procData.out
+		assert (output != null && output != "" ), "Output empty : " + procData.err
+		
+		def retList = []
+		output.eachLine{line->
+			if(line.trim() != ""){
+				retList.add(line.trim())
+			}
+		}
+		def size = retList.size()
+		if (size >= 1) {
+			return retList[size - 1]
+		} else {
+			return ""
+		}
+	}
+	
+	def convertToDate = { dateStr ->
+		dateStr = (dateStr.trim().split("\\.") as List )[0]	
+		java.text.SimpleDateFormat sf = new java.text.SimpleDateFormat("yyyyMMddHHmmss")
+		def date = sf.parse(dateStr)
+		sf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+		return sf.format(date)
+	}
+	
+	def resultData = [:]
+	resultData["OSName"] = getOSInfo("Caption")
+	resultData["VersionID"] = getOSInfo("Version")
+	resultData["WindowsDirName"] = getOSInfo("WindowsDirectory")
+	resultData["NumberOfUsersCnt"] = getOSInfo("NumberOfUsers")
+	resultData["HostName"] = getOSInfo("CSName")
+	def installDate = getOSInfo("InstallDate")
+	resultData["InstallDate"] = convertToDate(installDate)
+	resultData["ServicePackVersionID"] = getOSInfo("ServicePackMajorVersion")
+	
+	def listData = []
+	listData.add(resultData)
+	return listData
+}
+SENDTYPE = "Store"
+DEST = parameters.dest
+OSINFO = parameters.osinfo
+MONITORINGTYPE = '@OS'
+RESOURCEID = "Windows/OSInfo"

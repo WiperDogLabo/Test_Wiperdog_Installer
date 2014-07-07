@@ -1,0 +1,142 @@
+/**
+ * Monitoring statistics of processes.<br/>
+ * <p>
+ * Display processes running on the system.<br/>
+ * </p>
+ * @targetVersion Windows Xp Professional, Version 2002, Service Pack 3
+ * @return get information for each process in use.
+ * @returnParam ExecutalePathName The executable path to the process.
+ * @returnParam Name The name of the process.
+ * @returnParam PageFileUsageInt The total amount of page file usage by the process.
+ * @returnParam PriorityInt The priority of the process.
+ * @returnParam ProcessId The number id of the process.
+ * @returnParam WorkingSetSizeInt The size of the process for working.
+ */
+JOB = [name:"OS.Process_Windows"]
+
+FETCHACTION = {
+	def command = [type:"wmic",commandStr:"Process GET Name,ProcessId,WorkingSetSize,Priority,PageFileUsage"]
+	def procData = procRunner.procExecute(command,true)
+	//get output data
+	def output = procData.out
+	assert (output != null && output != "" ), "Output empty : " + procData.err
+	
+	def checkHeader = false
+	def headers = []
+	def rawData = []
+	def tmpData
+	def listData = []
+	def finalData = []
+	def dataItem = []
+	//process raw data
+	output.eachLine{
+		if (!it.contains("System")) {
+			it = it.replaceAll("(\\s+)", ",")
+			if(!checkHeader){
+				if(it.trim() != "") {
+					headers = (it.split(",") as List)
+					checkHeader = true
+				}
+			} else {
+				if(it.trim() != "") {
+					dataItem = (it.split(",") as List)
+					if (dataItem.size() == 5) { //If name has no space
+						rawData.add(dataItem)
+					} else {
+						//If name has space
+					}
+				}
+			}
+		}
+	}
+	
+	//Get ExecutablePath
+	command = [type:"wmic",commandStr:"Process GET ExecutablePath"]
+   	procData = procRunner.procExecute(command,true)
+  	output = procData.out
+	assert (output != null && output != "" ), "Output empty : " + procData.err	
+   	def exePathLst = []
+   	output.eachLine{
+   		if(it.trim() != "") {
+   	   		exePathLst.add(it.trim())
+   		}
+   	}
+   	exePathLst.remove(0)
+	
+	def getPath = {pathLst, processName -> 
+		def path = ""
+		pathLst.each {
+			if (it.contains(processName)) {
+				path = it
+			}
+		}
+		return path
+	}
+	
+	//get list data final
+	def dataRecord
+	for(int i = 0; i < rawData.size(); i++ ) {
+		tmpData = [:]
+		dataRecord = rawData[i]
+		for(int j = 0; j < headers.size(); j++){
+			if(headers[j] == "Name"){
+				tmpData["Name"] = dataRecord[j]
+			}
+			if(headers[j] == "PageFileUsage"){
+				tmpData["PageFileUsageInt"] = dataRecord[j].toLong()
+			}
+			if(headers[j] == "Priority"){
+				tmpData["PriorityInt"] = dataRecord[j].toLong()
+			}
+			if(headers[j] == "ProcessId"){
+				tmpData["ProcessId"] = dataRecord[j].toLong()
+			}
+			if(headers[j] == "WorkingSetSize"){
+				tmpData["WorkingSetSizeInt"] = dataRecord[j].toLong()
+			}
+		}
+		listData.add(tmpData)
+	}
+	
+	// Sort records by WorkingSetSizeInt and PageFileUsageInt
+	def arrayMapData = listData.toArray(listData)
+	Arrays.sort(arrayMapData, new Comparator() {
+		public int compare(arg0, arg1) {
+			def first = arg0
+			def second = arg1
+			int countTime = (second['WorkingSetSizeInt'] != null ? second['WorkingSetSizeInt'] : 0) - (first['WorkingSetSizeInt'] != null ? first['WorkingSetSizeInt'] : 0)
+			if (countTime == 0) {
+				int countExecute = (second['PageFileUsageInt'] != null ? second['PageFileUsageInt'] : 0) - (first['PageFileUsageInt'] != null ? first['PageFileUsageInt'] : 0)
+				countTime = (countExecute < 0 ? -1 : (countExecute == 0 ? 0 : 1))
+			}
+			return countTime
+		}
+	})
+	//get top 10 process
+	if (listData.size() > 10) {
+		 finalData = arrayMapData.getAt(0..9)
+	} else {
+		 finalData = arrayMapData
+	}
+	//Merge ExecutablePathName
+	finalData.each {record ->
+		record["ExecutablePathName"] = getPath(exePathLst, record["Name"])
+	}
+	return finalData
+}
+
+KEYEXPR = [_root:['ProcessId'],_sequence:['WorkingSetSizeInt','PageFileUsageInt','PriorityInt']]
+KEYEXPR._unit = ["PageFileUsageInt": "KB", "WorkingSetSizeInt":"byte"]
+KEYEXPR._chart = [
+	[
+        "type": "line",
+        "name": "Process Information",
+        "chart_columns": ["PageFileUsageInt", "WorkingSetSizeInt"]
+    ]
+]
+
+SENDTYPE = "Store"
+RESOURCEID = "Windows/Process"
+DEST = parameters.dest
+OSINFO = parameters.osinfo
+MONITORINGTYPE = '@OS'

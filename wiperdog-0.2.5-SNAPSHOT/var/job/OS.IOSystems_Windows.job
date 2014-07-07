@@ -1,0 +1,148 @@
+/**
+ * Monitoring system input/output.<br/>
+ * <p>
+ * Display the statistics for system.<br/>
+ * </p>
+ * @targetVersion Windows Xp Professional, Version 2002, Service Pack 3
+ * @return get status of disk in use.
+ * @returnParam DiskBytesVal Rate at which bytes are transferred to or from the disk during write or read operations.
+ * @returnParam DiskReadBytesVal Rate at which bytes are transferred from the disk during read operations.
+ * @returnParam DiskReadsVal Rate of read operations on the disk.
+ * @returnParam DiskTransfersVal Rate of read and write operations on the disk.
+ * @returnParam DiskWriteBytesVal Rate at which bytes are transferred to the disk during write operations.
+ * @returnParam DiskWritesVal Rate of write operations on the disk.
+ * @returnParam SplitIOVal Rate at which I/Os to the disk were split into multiple I/Os.
+ */
+JOB = [name:"OS.IOSystems_Windows"]
+
+FETCHACTION = {
+	def command = [type:"wmic",commandStr:"path Win32_PerfRawData_PerfDisk_PhysicalDisk Get Name, DiskTransfersPerSec,DiskReadsPerSec,DiskWritesPerSec,DiskBytesPerSec,DiskReadBytesPerSec,DiskWriteBytesPerSec,SplitIOPerSec"]
+	def procData = procRunner.procExecute(command,true)
+	//get output data
+	def output = procData.out
+	assert (output != null && output != "" ), "Output empty : " + procData.err
+	
+	def checkHeader = false
+	def headers = []
+	def rawData = []
+	def tmpData
+	def listData = []
+	//process raw data
+	output.eachLine{
+		it = it.replaceAll("(\\s+)", ",")
+		if(!checkHeader){
+			if(it.trim() != "") {
+				headers = (it.split(",") as List)
+				checkHeader = true
+			}
+		} else {
+			if((it.trim() != "") && it.contains("_Total")) {
+				rawData.add((it.split(",") as List))
+			}
+		}
+	}
+	//get list data final
+	rawData.each{
+		tmpData = [:]
+		for(int i=0; i < headers.size(); i++){
+			def data
+			try	{
+				data = it[i].toLong()
+			} catch(NumberFormatException  ex){
+			}
+			if(headers[i] == "DiskBytesPersec"){
+				tmpData["DiskBytesVal"] = data
+			}
+			if(headers[i] == "DiskReadBytesPersec"){
+				tmpData["DiskReadBytesVal"] = data
+			}
+			if(headers[i] == "DiskReadsPersec"){
+				tmpData["DiskReadsVal"] = data
+			}
+			if(headers[i] == "DiskTransfersPersec"){
+				tmpData["DiskTransfersVal"] = data
+			}
+			if(headers[i] == "DiskWriteBytesPersec"){
+				tmpData["DiskWriteBytesVal"] = data
+			}
+			if(headers[i] == "DiskWritesPersec"){
+				tmpData["DiskWritesVal"] = data
+			}
+			if(headers[i] == "SplitIOPerSec"){
+				tmpData["SplitIOVal"] = data
+			}
+		}
+		listData.add(tmpData)
+	}
+	return listData
+}
+ACCUMULATE = {
+  	assert interval != null, "First time, we cannot return meaningful values"
+  	if(prevOUTPUT != null) {
+    	OUTPUT.each { rec ->
+	      	def checkExists = false
+	      	prevOUTPUT.each { prevREC ->
+	        	// DiskBytesVal
+	          	rec['DiffDiskBytesVal'] = rec['DiskBytesVal'] - prevREC['DiskBytesVal']
+	          	// DiskReadBytesVal
+	          	rec['DiffDiskReadBytesVal'] = rec['DiskReadBytesVal'] - prevREC['DiskReadBytesVal']
+	          	// DiskReadsVal
+	          	rec['DiffDiskReadsVal'] = rec['DiskReadsVal'] - prevREC['DiskReadsVal']
+	          	// DiskTransfersVal
+	          	rec['DiffDiskTransfersVal'] = rec['DiskTransfersVal'] - prevREC['DiskTransfersVal']
+	          	// DiskWriteBytesVal
+	          	rec['DiffDiskWriteBytesVal'] = rec['DiskWriteBytesVal'] - prevREC['DiskWriteBytesVal']
+	          	// DiskWritesVal
+	          	rec['DiffDiskWritesVal'] = rec['DiskWritesVal'] - prevREC['DiskWritesVal']
+	          	// SplitIOVal
+	          	rec['DiffSplitIOVal'] = rec['SplitIOVal'] - prevREC['SplitIOVal']
+	          	checkExists = true
+	      	}
+	      	if(!checkExists) {
+	        	// DiskBytesVal
+          		rec['DiffDiskBytesVal'] = rec['DiskBytesVal']
+          		// DiskReadBytesVal
+          		rec['DiffDiskReadBytesVal'] = rec['DiskReadBytesVal']
+          		// DiskReadsVal
+          		rec['DiffDiskReadsVal'] = rec['DiskReadsVal']
+          		// DiskTransfersVal
+          		rec['DiffDiskTransfersVal'] = rec['DiskTransfersVal']
+          		// DiskWriteBytesVal
+          		rec['DiffDiskWriteBytesVal'] = rec['DiskWriteBytesVal']
+          		// DiskWritesVal
+          		rec['DiffDiskWritesVal'] = rec['DiskWritesVal']
+          		// SplitIOVal
+          		rec['DiffSplitIOVal'] = rec['SplitIOVal']
+	      	}
+    	}
+  	}
+}
+
+KEYEXPR = ['_sequence':['DiskTransfersVal','DiskReadsVal','DiskWritesVal']]
+KEYEXPR._unit = [
+		"DiskBytesVal":"byte", "DiffDiskBytesVal": "byte/interval",
+		"DiskReadBytesVal":"byte", "DiffDiskReadBytesVal": "byte/interval",
+		"DiskReadsVal":"count", "DiffDiskReadsVal": "count/interval",
+		"DiskTransfersVal":"count", "DiffDiskTransfersVal": "count/interval",
+		"DiskWriteBytesVal":"byte", "DiffDiskWriteBytesVal": "byte/interval",
+		"DiskWritesVal":"count", "DiffDiskWritesVal": "count/interval",
+		"SplitIOVal":"byte",  "DiffSplitIOVal": "byte/interval"
+	]
+KEYEXPR._chart = [
+	[
+        "type": "line",
+        "name": "Data byte tranfer",
+        "chart_columns": ["DiffDiskBytesVal", "DiffDiskReadBytesVal", "DiffDiskWriteBytesVal", "DiffSplitIOVal"]
+    ],
+    [
+        "type": "line",
+        "name": "Number of access times",
+        "chart_columns": ["DiffDiskReadsVal", "DiffDiskTransfersVal", "DiffDiskWritesVal"]
+    ]
+]
+
+SENDTYPE = "Store"
+RESOURCEID = "Windows/IOSystems"
+DEST = parameters.dest
+OSINFO = parameters.osinfo
+MONITORINGTYPE = '@OS'

@@ -19,6 +19,14 @@
 	wiperdogPath="/home/nghia/wpd"
 	installerJar="$1"
 	javaCommand="$JAVA_HOME/bin/java"
+        if [ "$JAVA_HOME" == "" ]; then
+            unset javaCommand
+            javaCommand=`which java`
+            if [ "$javaCommand" == "" ]; then
+              echo "Java not found, no JAVA_HOME was set and none java command found on PATH variable, cannot execute"
+              exit 1
+            fi
+        fi
 
         baseNameCmd=`which basename`
         if [ "$baseNameCmd" == "" ];then

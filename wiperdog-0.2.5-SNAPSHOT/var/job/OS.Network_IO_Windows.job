@@ -1,0 +1,143 @@
+/**
+ * Monitoring I/O of network.<br/>
+ * <p>
+ * Display status of the currently active interfaces.<br/>
+ * </p>
+ * @targetVersion Windows Xp Professional, Version 2002, Service Pack 3
+ * @return get information for network in use.
+ * @returnParam NetworkCardName The name of the interface.
+ * @returnParam PacketsReceivedCnt The number of packets have been received.
+ * @returnParam PacketsSentCnt The number of packets have been sent.
+ * @returnParam BytesReceivedVal The total amount of data have been received.
+ * @returnParam BytesSentVal The total amount of data have been sent.
+ */
+JOB = [name:"OS.Network_IO_Windows"]
+FETCHACTION = {
+   def command = [type:"wmic",commandStr:"path Win32_PerfRawData_Tcpip_NetworkInterface Get PacketsReceivedPersec,PacketsSentPersec,BytesReceivedPersec,BytesSentPersec"]
+   def procData = procRunner.procExecute(command,true)
+   def output = procData.out
+   assert (output != null && output != "" ), "Output empty : " + procData.err
+   
+   def checkHeader = false
+   def headers = []
+   def rawData = []
+   //process raw data
+   output.eachLine{
+   	    it = it.replaceAll("(\\s+)", ",")
+		if(!checkHeader){
+			if(it.trim() != "") {
+				headers = (it.split(",") as List)
+				checkHeader = true
+			}
+		} else {
+			if(it.trim() != "") {
+				rawData.add((it.split(",") as List))
+			}
+		}
+   }
+   
+   def resultData = []
+   
+   //Get Name of Network card
+   command = [type:"wmic",commandStr:"path Win32_PerfRawData_Tcpip_NetworkInterface Get Name"]
+   procData = procRunner.procExecute(command,true)
+   output = procData.out
+   assert (output != null && output != "" ), "Output empty : " + procData.err
+   def nameLst = []
+   output.eachLine{
+   	   	if (it.trim() != "") {
+			nameLst.add(it.trim())
+		}
+   }
+   nameLst.remove(0)
+   
+   //Merge headers and data
+   def dataRecord
+   def elemData
+   for(int i = 0; i < rawData.size(); i++ ) {
+	elemData = [:]
+	dataRecord = rawData[i]
+	for(int j = 0; j < dataRecord.size(); j++ ){
+		try	{
+			elemData[headers[j]] = dataRecord[j].toLong()
+		} catch(NumberFormatException  ex){
+		}
+	}
+	
+    def tmpElemData = [:]
+    tmpElemData['NetworkCardName'] = nameLst[i]
+    tmpElemData['PacketsReceivedCnt'] = elemData['PacketsReceivedPersec']
+    tmpElemData['PacketsSentCnt'] = elemData['PacketsSentPersec']
+    tmpElemData['BytesReceivedVal'] = elemData['BytesReceivedPersec']
+    tmpElemData['BytesSentVal'] = elemData['BytesSentPersec']
+		resultData.add(tmpElemData)
+   }
+   //Merge listData and list device
+   return resultData
+}
+
+ACCUMULATE = {
+  assert interval != null, "First time, we cannot return meaningful values"
+  if(prevOUTPUT != null) {
+    OUTPUT.each { rec ->
+      def checkExists = false
+      prevOUTPUT.each { prevREC ->
+        if (prevREC.NetworkCardName == rec.NetworkCardName) {
+          // packets have been received.
+          rec['DiffPacketsReceivedVal'] = rec['PacketsReceivedCnt'] - prevREC['PacketsReceivedCnt']
+          rec['PacketsReceivedPerSecVal'] = rec['DiffPacketsReceivedVal'] / interval
+          // packets have been sent.
+          rec['DiffPacketsSentVal'] = rec['PacketsSentCnt'] - prevREC['PacketsSentCnt']
+          rec['PacketsSentPerSecVal'] = rec['DiffPacketsSentVal'] / interval
+          // total packets have been received.
+          rec['DiffBytesReceivedVal'] = rec['BytesReceivedVal'] - prevREC['BytesReceivedVal']
+          rec['BytesReceivedPerSecVal'] = rec['DiffBytesReceivedVal'] / interval
+          // total packets have been sent.
+          rec['DiffBytesSentVal'] = rec['BytesSentVal'] - prevREC['BytesSentVal']
+          rec['BytesSentPerSecVal'] = rec['DiffBytesSentVal'] / interval
+          checkExists = true
+        }
+      }
+      if(!checkExists) {
+        // packets have been received.
+        rec['DiffPacketsReceivedVal'] = rec['PacketsReceivedCnt']
+        rec['PacketsReceivedPerSecVal'] = rec['PacketsReceivedCnt'] / interval
+        // packets have been sent.
+        rec['DiffPacketsSentVal'] = rec['PacketsSentCnt'] 
+        rec['PacketsSentPerSecVal'] = rec['PacketsSentCnt'] / interval
+        // total packets have been received.
+        rec['DiffBytesReceivedVal'] = rec['BytesReceivedVal']
+        rec['BytesReceivedPerSecVal'] = rec['DiffBytesReceivedVal'] / interval
+        // total packets have been sent.
+        rec['DiffBytesSentVal'] = rec['BytesSentVal']
+        rec['BytesSentPerSecVal'] = rec['DiffBytesSentVal'] / interval
+      }
+    }
+  }
+}
+
+KEYEXPR = [_root:["NetworkCardName"] , _sequence:["PacketsReceivedCnt","BytesReceivedVal"]]
+KEYEXPR._unit = [
+    "PacketsReceivedCnt" : "count", "DiffPacketsReceivedVal": "count/interval", "PacketsReceivedPerSecVal": "count/sec",
+    "PacketsSentCnt":"count", "DiffPacketsSentVal": "count/interval", "PacketsSentPerSecVal": "count/sec",
+    "BytesReceivedCnt":"byte", "DiffBytesReceivedVal": "byte/interval", "BytesReceivedPerSecVal": "byte/sec",
+    "BytesSentCnt":"byte", "DiffBytesSentVal": "byte/interval", "BytesSentPerSecVal": "byte/sec"
+  ]
+KEYEXPR._chart = [
+    [
+        "type": "line",
+        "name": "Network I/O Windows - Packets transfering",
+        "chart_columns": ["DiffPacketsReceivedVal", "DiffPacketsSentVal"]
+    ],
+    [
+        "type": "line",
+        "name": "Network I/O Windows - Bytes transfering",
+        "chart_columns": ["DiffBytesReceivedVal", "DiffBytesSentVal"]
+
+    ]
+]
+SENDTYPE = "Store"
+RESOURCEID = "Windows/NetworkIO"
+DEST = parameters.dest
+OSINFO = parameters.osinfo
+MONITORINGTYPE = '@OS'

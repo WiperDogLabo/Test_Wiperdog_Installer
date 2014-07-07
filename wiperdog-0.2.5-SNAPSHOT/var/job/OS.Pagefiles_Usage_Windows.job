@@ -1,0 +1,91 @@
+/**
+ * Monitoring statistics of page file.<br/>
+ * @targetVersion Windows Xp Professional, Version 2002, Service Pack 3
+ * @return get information for each pagefile in use.
+ * @returnParam PagefileLocName The location to pagefile.
+ * @returnParam TotalPagefileSizeKB The total amount of page file.
+ * @returnParam CurrentUsageKB The number of page file usage.
+ * @returnParam FreePagefileKB The number of page file free.
+ * @returnParam UsedPct The percentage of page file used.
+ */
+JOB = [name:"OS.Pagefiles_Usage_Windows"]
+FETCHACTION = {
+	def cmdGetPagefile= [type:"wmic",commandStr:"PAGEFILE GET CurrentUsage,AllocatedBaseSize"]
+	def procData = procRunner.procExecute(cmdGetPagefile,true)
+	def dataPagefile = procData.out
+	assert (dataPagefile != null && dataPagefile != "" ), "Output empty : " + procData.err
+	def checkHeader = false
+	def headers = []
+	def rawData = []
+	//process raw data
+	dataPagefile.eachLine{
+		it = it.replaceAll("(\\s+)", ",")
+		if(!checkHeader){
+			if(it.trim() != "") {
+				headers = (it.split(",") as List)
+				checkHeader = true
+			}
+		} else {
+			if(it.trim() != "") {
+				rawData.add((it.split(",") as List))
+			}
+		}
+	}
+	def resultData = []
+	
+	//Get name of page file
+   	command = [type:"wmic",commandStr:"PAGEFILE GET Name"]
+   	procData = procRunner.procExecute(command,true)
+  	output = procData.out
+	assert (output != null && output != "" ), "Output empty : " + procData.err
+   	def nameLst = []
+   	output.eachLine{
+   	   	if (it.trim() != "") {
+			nameLst.add(it.trim())
+		}
+   	}
+   	nameLst.remove(0)
+	
+	//Merge headers and data
+	def dataRecord
+    def elemData
+    for(int i = 0; i < rawData.size(); i++ ) {
+		elemData = [:]
+		dataRecord = rawData[i]
+		for(int j = 0; j < dataRecord.size(); j++ ){
+			try{
+				elemData[headers[j]] = dataRecord[j].toLong()
+			} catch(Exception ex){
+			}
+		}
+		
+		def finalData = [:]
+		finalData["PagefileLocName"] = nameLst[i].replace("\\","/")
+		finalData["FreePagefileKB"] = elemData["AllocatedBaseSize"] - elemData["CurrentUsage"]
+		finalData["UsedPct"] = Math.round((elemData["CurrentUsage"]/elemData["AllocatedBaseSize"])*100)
+		finalData["CurrentUsageKB"] = elemData["CurrentUsage"]
+		finalData["TotalPagefileSizeKB"] = elemData["AllocatedBaseSize"]
+		resultData.add(finalData)
+		
+	}
+	return resultData
+}
+KEYEXPR = [_root:["PagefileLocName"],_sequence:["CurrentUsageKB","FreePagefileKB","UsedPct"]]
+KEYEXPR._unit = [ "TotalPagefileSizeKB" : "KB", "CurrentUsageKB": "KB", "FreePagefileKB" : "KB","UsedPct":"%" ]
+KEYEXPR._chart = [
+	[
+		type:"line",
+		name:"Pagefiles Usage Windows - Usage percentage",
+		chart_columns:["UsedPct"]
+	],
+	[	
+		type:"pie",
+		name:"Pagefiles Usage Windows",
+		chart_columns:["CurrentUsageKB","FreePagefileKB"]
+	] 
+]
+DEST = parameters.dest
+OSINFO = parameters.osinfo
+MONITORINGTYPE = '@OS'
+RESOURCEID = "Windows/PageFilesUsage"
+SENDTYPE = "Store"
