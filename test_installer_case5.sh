@@ -40,12 +40,12 @@
         #wiperdogPath="$curDir/$wiperDogDirName"
         
 	# Values of other option provided by this test script
-        wiperdogPath="/home/nghia/wpd"
+        wiperdogPath="${HOME}/wpd"
         nettyPort=99999
-        jobDir="/home/nghia/wpd/var/job"
-        triggerDir="/home/nghia/wpd/var/trigger"
-        jobClassDir="/home/nghia/wpd/var/jobcls"
-        jobInstDir="/home/nghia/wpd/var/jobinst"
+        jobDir="${HOME}/wpd/var/job"
+        triggerDir="${HOME}/wpd/var/trigger"
+        jobClassDir="${HOME}/wpd/var/jobcls"
+        jobInstDir="${HOME}/wpd/var/jobinst"
         policyEmail="nghia.n.v2007@gmail.com"
         
 	# Following parameters are not provided by test script, use default value in installer

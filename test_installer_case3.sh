@@ -16,7 +16,7 @@
 
 	# ========= CASE 3 =========
 	echo  ">>>>> CASE 3: Test installer with  some option out of -d option <<<<<"
-	wiperdogPath="/home/nghia/wpd"
+	wiperdogPath="${HOME}/wpd"
 	installerJar="$1"
 	javaCommand="$JAVA_HOME/bin/java"
         if [ "$JAVA_HOME" == "" ]; then
