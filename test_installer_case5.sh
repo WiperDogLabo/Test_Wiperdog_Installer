@@ -69,9 +69,6 @@ expect <<- DONE
 	catch { exec rm -f ./WiperdogInstaller.log } errorCode
         
 	spawn $javaCommand -jar $installerJar -ni -d $wiperdogPath -j $nettyPort -jd $jobDir -cd $jobClassDir -td $triggerDir -id $jobInstDir -mp $policyEmail
-	expect "* -ni option"
-	send " \r"
-	
 	#Confirm getting input parameter for pre-configure
 	expect "Getting input parameters for pre-configured wiperdog*"
 	send " \r"

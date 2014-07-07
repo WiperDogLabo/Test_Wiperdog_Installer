@@ -61,8 +61,6 @@ expect <<- DONE
 	# Remove old file
 	catch { exec rm -rf $wiperdogPath } errorCode
 	spawn $javaCommand -jar $installerJar -d $wiperdogPath
-	expect "* -ni option"
-	send " \r"
 	
 	#Confirm getting input parameter for pre-configure
 	expect "Getting input parameters for pre-configured wiperdog*"
