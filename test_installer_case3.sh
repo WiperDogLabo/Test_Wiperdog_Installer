@@ -19,7 +19,14 @@
 	wiperdogPath="/home/nghia/wpd"
 	installerJar="$1"
 	javaCommand="$JAVA_HOME/bin/java"
-	jarFileName=`/bin/basename $installerJar` 
+
+        baseNameCmd=`which basename`
+        if [ "$baseNameCmd" == "" ];then
+            echo "Command basename not found, cannot perform test"
+            exit 1
+        fi
+
+	jarFileName=`$baseNameCmd $installerJar` 
 	curDir=`pwd` 
 	
 	nettyPort=11111

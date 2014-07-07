@@ -19,9 +19,15 @@
 	echo  ">>>>> CASE 5: Test installer with  no option <<<<<"
 	installerJar="$1"
         javaCommand="$JAVA_HOME/bin/java"
-        jarFileName=`/bin/basename $installerJar`
+        baseNameCmd=`which basename`
+        if [ "$baseNameCmd" == "" ];then
+            echo "Command basename not found, cannot perform test"
+            exit 1
+        fi
+
+        jarFileName=`$baseNameCmd $installerJar`
         curDir=`pwd`
-        #wiperDogDirName=`/bin/basename $installerJar -unix.jar`
+        #wiperDogDirName=`$baseNameCmd $installerJar -unix.jar`
         #wiperdogPath="$curDir/$wiperDogDirName"
         
 	# Values of other option provided by this test script
